@@ -10,6 +10,7 @@ import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { socketAuthMiddleware } from './socketAuth.js';
 import { registerChatHandlers } from './chat.socket.js';
+import { registerWebrtcHandlers } from './webrtc.socket.js';
 import { userRoom } from './stream.socket.js';
 
 let ioInstance = null;
@@ -32,6 +33,7 @@ export const initSocket = (httpServer) => {
     if (socket.user) socket.join(userRoom(socket.user._id));
 
     registerChatHandlers(io, socket);
+    registerWebrtcHandlers(io, socket);
 
     socket.on('disconnect', (reason) => {
       logger.debug(`Socket disconnected: ${socket.id} (${reason})`);

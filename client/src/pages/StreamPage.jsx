@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { streamService } from '../services/stream.service.js';
 import { useStreamStore } from '../store/streamStore.js';
+import { useAuth } from '../hooks/useAuth.js';
 import StreamPlayer from '../components/stream/StreamPlayer.jsx';
 import ChatBox from '../components/chat/ChatBox.jsx';
 import FollowButton from '../components/channel/FollowButton.jsx';
@@ -14,6 +15,7 @@ import { ROUTES } from '../constants/routes.js';
 const StreamPage = () => {
   const { streamId } = useParams();
   const liveViewerCount = useStreamStore((s) => s.viewerCount);
+  const { user } = useAuth();
 
   const { data, isLoading } = useQuery({
     queryKey: ['stream', streamId],
@@ -33,11 +35,13 @@ const StreamPage = () => {
   if (!stream) return <p className="text-white/40">Stream not found.</p>;
 
   const channel = stream.channel;
+  const ownerId = channel?.owner?._id ?? channel?.owner;
+  const isOwner = Boolean(user && ownerId && String(ownerId) === String(user._id));
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <div className="min-w-0 flex-1">
-        <StreamPlayer stream={stream} viewerCount={liveViewerCount || stream.viewerCount} />
+        <StreamPlayer stream={stream} viewerCount={liveViewerCount || stream.viewerCount} isOwner={isOwner} />
 
         <div className="glass-card mt-4 p-4">
           <div className="flex items-start justify-between gap-4">
