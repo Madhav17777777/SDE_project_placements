@@ -9,7 +9,9 @@ import { ROLES } from '../utils/constants.js';
 
 const router = Router();
 
-const requireStreamer = requireRole(ROLES.STREAMER, ROLES.ADMIN);
+// Any authenticated user can upload -- see stream.routes.js for the same
+// reasoning (no separate "become a streamer" role upgrade in this project).
+const requireStreamer = requireRole(ROLES.USER, ROLES.STREAMER, ROLES.ADMIN);
 
 // Static paths before the `/:id` catch-all.
 router.get('/', videoController.listVideos);

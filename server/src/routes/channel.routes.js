@@ -12,7 +12,10 @@ router.post('/', verifyJWT, createChannelValidation, validate, channelController
 router.patch(
   '/me',
   verifyJWT,
-  requireRole(ROLES.STREAMER, ROLES.ADMIN),
+  // Any authenticated user can manage a channel -- there's no separate
+  // "become a streamer" upgrade step in this project, so USER is allowed
+  // alongside STREAMER/ADMIN rather than gating this behind a role change.
+  requireRole(ROLES.USER, ROLES.STREAMER, ROLES.ADMIN),
   editChannelValidation,
   validate,
   channelController.editChannel

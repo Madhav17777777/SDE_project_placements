@@ -56,8 +56,10 @@ function App() {
         </Route>
       </Route>
 
-      {/* Streamer/Admin dashboard, own chrome */}
-      <Route element={<ProtectedRoute allowedRoles={['streamer', 'admin']} />}>
+      {/* Streaming dashboard -- any logged-in user can go live, upload, and
+          manage a channel in this project (no separate "become a streamer"
+          role upgrade), so 'user' is allowed here alongside streamer/admin. */}
+      <Route element={<ProtectedRoute allowedRoles={['user', 'streamer', 'admin']} />}>
         <Route element={<DashboardLayout />}>
           <Route path={ROUTES.STREAMER_DASHBOARD} element={<Dashboard />} />
           <Route path={ROUTES.STREAM_MANAGER} element={<StreamManager />} />

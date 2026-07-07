@@ -10,7 +10,11 @@ import { ROLES } from '../utils/constants.js';
 
 const router = Router();
 
-const requireStreamer = requireRole(ROLES.STREAMER, ROLES.ADMIN);
+// Any authenticated user can go live -- this project doesn't gate streaming
+// behind a separate "become a streamer" role upgrade, so USER is allowed
+// alongside STREAMER/ADMIN. The name is kept as `requireStreamer` since it
+// still means "may act as a streamer," it's just no longer role-exclusive.
+const requireStreamer = requireRole(ROLES.USER, ROLES.STREAMER, ROLES.ADMIN);
 
 // Public feeds — order matters: static paths before the `/:id` catch-all.
 router.get('/live', streamController.getLiveFeed);
