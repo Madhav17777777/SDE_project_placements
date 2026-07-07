@@ -36,7 +36,11 @@ const StreamPage = () => {
 
   const channel = stream.channel;
   const ownerId = channel?.owner?._id ?? channel?.owner;
-  const isOwner = Boolean(user && ownerId && String(ownerId) === String(user._id));
+  // The auth user object comes from User.toSafeJSON() on the backend, which
+  // exposes the id as `id`, not `_id` -- unlike Mongoose documents elsewhere.
+  // Falling back to `_id` too in case that ever changes.
+  const currentUserId = user?.id ?? user?._id;
+  const isOwner = Boolean(currentUserId && ownerId && String(ownerId) === String(currentUserId));
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
