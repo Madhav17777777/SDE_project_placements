@@ -13,7 +13,7 @@ const links = [
 
 const Sidebar = () => {
   const isSidebarOpen = useUiStore((s) => s.isSidebarOpen);
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   return (
     <aside
@@ -40,7 +40,10 @@ const Sidebar = () => {
 
       <div className="my-2 border-t border-white/10" />
 
-      {isAuthenticated && user?.role !== 'user' ? (
+      {/* Any logged-in user can go live / upload / manage a channel in this
+          project -- there's no separate "become a streamer" role upgrade,
+          so this link is shown to every authenticated user, not gated by role. */}
+      {isAuthenticated ? (
         <NavLink
           to={ROUTES.STREAMER_DASHBOARD}
           className={({ isActive }) =>
