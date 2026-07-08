@@ -52,17 +52,17 @@ export const registerUser = async ({ username, email, password, fullName }) => {
   const rawVerificationToken = user.createEmailVerificationToken();
   await user.save();
 
-  // The account already exists in the database at this point -- a flaky or
-  // misconfigured SMTP provider (timeout, rate limit, bad credentials)
-  // should not turn an otherwise-successful signup into an error response,
-  // since that's confusing (the user sees "signup failed" but can then log
-  // in with the same credentials because the account really was created).
-  // The user can always request a fresh link via POST /auth/resend-verification.
-  try {
-    await sendVerificationEmail(user, rawVerificationToken);
-  } catch (error) {
+  // Deliberately NOT awaited: the account already exists in the database at
+  // this point, so the HTTP response should return right away regardless of
+  // how slow (or stuck) the SMTP connection is. Previously this was
+  // `await`ed, which meant a slow/hanging Gmail connection left the signup
+  // request stuck "pending" in the browser forever, even though the account
+  // had already been created — very confusing, since the user would then
+  // see no response at all despite the signup having actually succeeded.
+  // Errors are still caught and logged so they're visible in Render logs.
+  sendVerificationEmail(user, rawVerificationToken).catch((error) => {
     logger.warn(`Failed to send verification email to ${user.email}: ${error.message}`);
-  }
+  });
 
   return user;
 };
@@ -149,6 +149,10 @@ export const resendVerificationEmail = async (userId) => {
   const rawToken = user.createEmailVerificationToken();
   await user.save();
 
+  // This one IS awaited (unlike registerUser) since the user explicitly
+  // asked "send me a new email" and the UI should tell them if it failed --
+  // it's now bounded by email.service.js's connection/socket timeouts, so a
+  // stuck SMTP connection fails within ~10-15s instead of hanging forever.
   try {
     await sendVerificationEmail(user, rawToken);
   } catch (error) {
@@ -165,15 +169,12 @@ export const forgotPassword = async (email) => {
   const rawToken = user.createPasswordResetToken();
   await user.save();
 
-  try {
-    await sendPasswordResetEmail(user, rawToken);
-  } catch (error) {
-    // Same reasoning as registerUser: the reset token is already saved, and
-    // the controller intentionally always returns the same generic success
-    // message here (to avoid leaking whether the email exists) -- so a
-    // flaky SMTP send shouldn't surface as a user-visible error either.
+  // Not awaited, same reasoning as registerUser -- the controller always
+  // returns the same generic response regardless, so there's no reason to
+  // block the response on SMTP speed here either.
+  sendPasswordResetEmail(user, rawToken).catch((error) => {
     logger.warn(`Failed to send password reset email to ${user.email}: ${error.message}`);
-  }
+  });
 };
 
 export const resetPassword = async (rawToken, newPassword) => {
