@@ -19,6 +19,7 @@ import { STREAM_STATUS, NOTIFICATION_TYPES, socketRooms } from '../utils/constan
 import { parsePagination, buildPageMeta } from '../utils/paginate.js';
 import { uploadBuffer, deleteAsset } from './cloudinary.service.js';
 import { createNotification } from './notification.service.js';
+import { logger } from '../config/logger.js';
 
 const getOwnedChannel = async (userId) => {
   const channel = await Channel.findOne({ owner: userId });
@@ -92,28 +93,35 @@ export const goLive = async (userId, streamId, io = null) => {
   channel.currentStream = stream._id;
   await channel.save();
 
-  // Fan out a "your followed streamer just went live" notification. Fine at
-  // portfolio-project scale; a production system would queue this instead
-  // of inserting synchronously in the request path.
+  // The stream is already live in the database at this point -- fanning out
+  // "your followed streamer just went live" notifications is a nice-to-have,
+  // not the core action, so a failure notifying any one follower (bad data,
+  // a transient DB hiccup, a socket error) must not turn an already-successful
+  // "go live" into an error response for the streamer, and must not stop the
+  // rest of the followers from being notified either.
   const followers = await Follow.find({ channel: channel._id }).select('follower');
   if (followers.length > 0) {
     await Promise.all(
       followers.map(async (f) => {
-        const notification = await createNotification({
-          recipient: f.follower,
-          sender: channel.owner,
-          type: NOTIFICATION_TYPES.LIVE,
-          message: `${channel.channelName} just went live: ${stream.title}`,
-          link: `/stream/${stream._id}`,
-          relatedEntity: { entityType: 'Stream', entityId: stream._id },
-        });
-
-        if (io) {
-          io.to(socketRooms.user(f.follower)).emit('stream:live', {
-            channel: { id: channel._id, channelName: channel.channelName, slug: channel.slug },
-            stream: { id: stream._id, title: stream.title },
+        try {
+          const notification = await createNotification({
+            recipient: f.follower,
+            sender: channel.owner,
+            type: NOTIFICATION_TYPES.LIVE,
+            message: `${channel.channelName} just went live: ${stream.title}`,
+            link: `/stream/${stream._id}`,
+            relatedEntity: { entityType: 'Stream', entityId: stream._id },
           });
-          io.to(socketRooms.user(f.follower)).emit('notification:new', { notification });
+
+          if (io) {
+            io.to(socketRooms.user(f.follower)).emit('stream:live', {
+              channel: { id: channel._id, channelName: channel.channelName, slug: channel.slug },
+              stream: { id: stream._id, title: stream.title },
+            });
+            io.to(socketRooms.user(f.follower)).emit('notification:new', { notification });
+          }
+        } catch (error) {
+          logger.warn(`goLive succeeded but notifying follower ${f.follower} failed: ${error.message}`);
         }
       })
     );

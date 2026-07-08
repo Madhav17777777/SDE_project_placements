@@ -19,7 +19,7 @@ const FollowButton = ({ channelId }) => {
   const toggle = useMutation({
     mutationFn: () => (isFollowing ? userService.unfollowChannel(channelId) : userService.followChannel(channelId)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['followStatus', channelId] }),
-    onError: () => toast.error('Something went wrong'),
+    onError: (err) => toast.error(err.response?.data?.message || 'Something went wrong'),
   });
 
   if (!isAuthenticated) {
@@ -29,6 +29,8 @@ const FollowButton = ({ channelId }) => {
       </Button>
     );
   }
+
+  if (!channelId) return null;
 
   return (
     <Button variant={isFollowing ? 'secondary' : 'primary'} onClick={() => toggle.mutate()} isLoading={toggle.isPending}>

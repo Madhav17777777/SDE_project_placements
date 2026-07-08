@@ -4,6 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import { parsePagination, buildPageMeta } from '../utils/paginate.js';
 import { createNotification } from './notification.service.js';
 import { NOTIFICATION_TYPES } from '../utils/constants.js';
+import { logger } from '../config/logger.js';
 import { getIO } from '../sockets/index.js';
 import { emitToUser } from '../sockets/stream.socket.js';
 
@@ -23,17 +24,25 @@ export const followChannel = async (followerId, channelId) => {
 
   await Channel.updateOne({ _id: channelId }, { $inc: { followersCount: 1 } });
 
-  const notification = await createNotification({
-    recipient: channel.owner,
-    sender: followerId,
-    type: NOTIFICATION_TYPES.FOLLOW,
-    message: 'You have a new follower',
-    link: `/channel/${channel.slug}/followers`,
-    relatedEntity: { entityType: 'Channel', entityId: channel._id },
-  });
+  // The follow itself is already committed at this point -- notifying the
+  // channel owner is a nice-to-have, not the core action, so a failure here
+  // (bad data, a transient DB hiccup, a socket error) must not turn an
+  // already-successful follow into an error response for the follower.
+  try {
+    const notification = await createNotification({
+      recipient: channel.owner,
+      sender: followerId,
+      type: NOTIFICATION_TYPES.FOLLOW,
+      message: 'You have a new follower',
+      link: `/channel/${channel.slug}/followers`,
+      relatedEntity: { entityType: 'Channel', entityId: channel._id },
+    });
 
-  const io = getIO();
-  if (io) emitToUser(io, channel.owner, 'notification:new', { notification });
+    const io = getIO();
+    if (io) emitToUser(io, channel.owner, 'notification:new', { notification });
+  } catch (error) {
+    logger.warn(`Follow succeeded but notifying channel owner failed: ${error.message}`);
+  }
 };
 
 export const unfollowChannel = async (followerId, channelId) => {

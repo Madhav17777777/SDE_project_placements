@@ -8,6 +8,7 @@ import ApiError from '../utils/ApiError.js';
 import { hashToken } from '../utils/hashToken.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/generateTokens.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from './email.service.js';
+import { logger } from '../config/logger.js';
 
 const msFromJwtExpiry = (expiry) => {
   // Supports formats like '15m', '7d', '1h'. Falls back to 7 days.
@@ -51,7 +52,17 @@ export const registerUser = async ({ username, email, password, fullName }) => {
   const rawVerificationToken = user.createEmailVerificationToken();
   await user.save();
 
-  await sendVerificationEmail(user, rawVerificationToken);
+  // The account already exists in the database at this point -- a flaky or
+  // misconfigured SMTP provider (timeout, rate limit, bad credentials)
+  // should not turn an otherwise-successful signup into an error response,
+  // since that's confusing (the user sees "signup failed" but can then log
+  // in with the same credentials because the account really was created).
+  // The user can always request a fresh link via POST /auth/resend-verification.
+  try {
+    await sendVerificationEmail(user, rawVerificationToken);
+  } catch (error) {
+    logger.warn(`Failed to send verification email to ${user.email}: ${error.message}`);
+  }
 
   return user;
 };
@@ -137,7 +148,13 @@ export const resendVerificationEmail = async (userId) => {
 
   const rawToken = user.createEmailVerificationToken();
   await user.save();
-  await sendVerificationEmail(user, rawToken);
+
+  try {
+    await sendVerificationEmail(user, rawToken);
+  } catch (error) {
+    logger.warn(`Failed to resend verification email to ${user.email}: ${error.message}`);
+    throw ApiError.internal('Could not send verification email right now — please try again shortly');
+  }
 };
 
 export const forgotPassword = async (email) => {
@@ -147,7 +164,16 @@ export const forgotPassword = async (email) => {
 
   const rawToken = user.createPasswordResetToken();
   await user.save();
-  await sendPasswordResetEmail(user, rawToken);
+
+  try {
+    await sendPasswordResetEmail(user, rawToken);
+  } catch (error) {
+    // Same reasoning as registerUser: the reset token is already saved, and
+    // the controller intentionally always returns the same generic success
+    // message here (to avoid leaking whether the email exists) -- so a
+    // flaky SMTP send shouldn't surface as a user-visible error either.
+    logger.warn(`Failed to send password reset email to ${user.email}: ${error.message}`);
+  }
 };
 
 export const resetPassword = async (rawToken, newPassword) => {
